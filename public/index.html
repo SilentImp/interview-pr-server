@@ -63,6 +63,13 @@
     input {
       display: block;
       width: 100%;
+      box-sizing: border-box;
+    }
+
+    select {
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
     }
 
     @keyframes loading {
@@ -84,16 +91,36 @@
       <legend>Запрошення куратора на код-ревью</legend>
       <label>
         Логін куратора:
-        <input required type="text" autocomplete="username" name="username" autofocus placeholder="silentimp"
+        <input
+          required
+          type="text"
+          autocomplete="username"
+          name="username"
+          autofocus
+          placeholder="silentimp"
           value="" />
       </label>
       <label>
+        Курс:
+        <select required name="course">
+          <option value="html-css">HTML &amp; CSS</option>
+          <option value="javascript">JavaScript</option>
+          <option selected value="webapp">Веб-застосунки</option>
+          <option value="react">React.js</option>
+        </select>
+      </label>
+      <label>
         Ваш пароль:
-        <input required type="password" name="password" autocomplete="current-password" placeholder="Слава Україні"
-          value="">
+        <input
+          required
+          type="password"
+          name="password"
+          autocomplete="current-password"
+          placeholder="Слава Україні"
+          value="" />
       </label>
     </fieldset>
-    <button>Запросити</button>
+    <button type="submit">Запросити</button>
   </form>
 
   <dialog>
@@ -110,8 +137,8 @@
 
   <script>
     (function () {
-      const pullRequestURL = username => new URL(`https://github.com/prjctr-react/curator-${username}/pull/1`);
-      const repoURL = username => new URL(`https://github.com/prjctr-react/curator-${username}/`);
+      const pullRequestURL = (username, course) => new URL(`https://github.com/prjctr-${course}/curator-${username}/pull/1`);
+      const repoURL = (username, course) => new URL(`https://github.com/prjctr-${course}/curator-${username}/`);
       const dialog = document.querySelector('dialog');
       const dialogRepoElement = dialog.querySelector('#dialog-repo i');
       const dialogPRElement = dialog.querySelector('#dialog-pr i');
@@ -152,10 +179,10 @@
 
           if (response.status === 204) {
             usernameInput.value = "";
-            const repo = repoURL(body.get('username')).href;
+            const repo = repoURL(body.get('username'), body.get('course')).href;
             dialogRepoElement.textContent = repo;
             dialogRepoElement.parentNode.setAttribute('href', repo);
-            const pr = pullRequestURL(body.get('username')).href;
+            const pr = pullRequestURL(body.get('username'), body.get('course')).href;
             dialogPRElement.textContent = pr;
             dialogPRElement.parentNode.setAttribute('href', pr);
             form.hidden = true;

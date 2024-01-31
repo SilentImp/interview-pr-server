@@ -5,12 +5,17 @@ const { readFileSync } = require('node:fs');
 const { checkSchema, validationResult } = require('express-validator');
 const { createTerminus } = require('@godaddy/terminus');
 const bodyParser = require('body-parser');
-const { duplicateRepoAndCreatePR } = require('interview-pr');
+const { duplicateRepoAndCreatePR, duplicateRepo } = require('interview-pr');
 const multer = require('multer');
 require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 const upload = multer();
+
+const courseFunctionMap = new Map([
+  ["webapp", duplicateRepo],
+  ["react", duplicateRepoAndCreatePR],
+]);
 
 console.log(
   process.env.INVITE_PASSWORD,
@@ -28,6 +33,17 @@ app.post(
   checkSchema({
     username: {
       errorMessage: 'Будь ласка введіть логін куратора на GitHub',
+      notEmpty: true,
+      optional: false,
+      trim: true,
+      in: ['body'],
+    },
+    course: {
+      isIn: {
+        options: [['html-css', 'javascript', 'webapp', 'react']],
+        errorMessage: `Курс має бути 'html-css', 'javascript', 'webapp' чи 'react'`,
+      },
+      errorMessage: 'Потрібно обрати назву курсу',
       notEmpty: true,
       optional: false,
       trim: true,
@@ -55,23 +71,38 @@ app.post(
       res.status(400).json(validation.errors).end();
       return;
     }
-    const filePath = path.join(__dirname, './node_modules/interview-pr', './description.md');
-    const PRDesc = readFileSync(filePath, 'utf8');
 
+
+    const result = await duplicateRepo({
+      token: process.env.INVITE_GITHUB_TOKEN,
+      curator: req.body.username,
+      owner: `prjctr-${course}`,
+      source: 'curator',
+      target: `curator-${req.body.username}`,
+    });
+
+
+    const filePath = path.join(__dirname, `./node_modules/interview-pr/descriptions`, `./${course}.md`);
+    const PRDesc = readFileSync(filePath, 'utf8');
+    const options = {
+      username: process.env.INVITE_GITHUB_USERNAME,
+      token: process.env.INVITE_GITHUB_TOKEN,
+      curator: req.body.username,
+      owner: `prjctr-${course}`,
+      source: 'curator',
+      target: `curator-${req.body.username}`,
+      from: '3-state',
+      to: 'main',
+      localPathToRepo: __dirname,
+      PRTitle: '3-state',
+      PRDesc,
+    };
+    const cloner = courseFunctionMap.get(course);
+    if (cloner === undefined) {
+      throw new Error(`No curator test task for "${course}" course implemented`);
+    }
     try {
-      const result = await duplicateRepoAndCreatePR({
-        username: process.env.INVITE_GITHUB_USERNAME,
-        token: process.env.INVITE_GITHUB_TOKEN,
-        curator: req.body.username,
-        owner: 'prjctr-react',
-        source: 'curator',
-        target: `curator-${req.body.username}`,
-        from: '3-state',
-        to: 'main',
-        localPathToRepo: __dirname,
-        PRTitle: '3-state',
-        PRDesc,
-      });
+      const result = await cloner(options);
       console.log(result);
       console.log(result?.stdout?.toString());
       console.log(result?.stderr?.toString());
