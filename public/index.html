@@ -125,23 +125,30 @@
 
   <dialog>
     <p>Куратора запрошено! Посилання:</p>
-    <ul>
-      <li><a id="dialog-repo" href="">Репозіторій який створено: <i></i></a></li>
-      <li><a id="dialog-pr" href="">Пулл реквест для код-ревью: <i></i></a></li>
-    </ul>
+    <ul id="links-list"></ul>
     <p>Бажаєте запросити ще одного?</p>
     <form method="dialog">
       <button>Так</button>
     </form>
   </dialog>
 
+  <template id="list-item"><li><a href=""><b></b>: <i></i></a></li></template>
+
   <script>
     (function () {
+      const hasPR = {
+        'react': true,
+        'webapp': false,
+        'html-css': true,
+        'javascript': true,
+      }
       const pullRequestURL = (username, course) => new URL(`https://github.com/prjctr-${course}/curator-${username}/pull/1`);
       const repoURL = (username, course) => new URL(`https://github.com/prjctr-${course}/curator-${username}/`);
       const dialog = document.querySelector('dialog');
-      const dialogRepoElement = dialog.querySelector('#dialog-repo i');
-      const dialogPRElement = dialog.querySelector('#dialog-pr i');
+      const dialogList = document.querySelector('#links-list');
+      const listItemTemplate = document.querySelector('#list-item');
+
+
       const form = document.querySelector('form');
       const inviteMoreButton = dialog.querySelector('button');
       const inviteButton = form.querySelector('button');
@@ -153,7 +160,16 @@
         password: passwordInput,
       };
 
-      console.log(dialogRepoElement, dialogPRElement);
+      const buildListItem = (type, url) => {
+        const item = listItemTemplate.content.cloneNode(true);
+        const typeElement = item.querySelector('b');
+        const urlElement = item.querySelector('i');
+        const linkElement = item.querySelector('a');
+        typeElement.textContent = type;
+        linkElement.setAttribute('href', url);
+        urlElement.textContent = url;
+        return item;
+      };
 
       const submitHandler = async (event) => {
 
@@ -177,14 +193,20 @@
           fieldset.removeAttribute('disabled');
           form.classList.toggle('loading', false);
 
-          if (response.status === 204) {
-            usernameInput.value = "";
-            const repo = repoURL(body.get('username'), body.get('course')).href;
-            dialogRepoElement.textContent = repo;
-            dialogRepoElement.parentNode.setAttribute('href', repo);
-            const pr = pullRequestURL(body.get('username'), body.get('course')).href;
-            dialogPRElement.textContent = pr;
-            dialogPRElement.parentNode.setAttribute('href', pr);
+          if (response.status === 200) {
+            const data = await response.json();
+
+
+            const items = data
+              .flat(Infinity)
+              .map(({type, url}) => buildListItem(type, url))
+              .reduce((fragment, element) => {
+                fragment.appendChild(element);
+                return fragment;
+              }, document.createDocumentFragment());
+            const elements = dialogList.innerHTML = '';
+            dialogList.appendChild(items);
+
             form.hidden = true;
             dialog.showModal();
           } else {

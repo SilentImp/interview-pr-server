@@ -1,7 +1,7 @@
 const express = require('express');
 const http = require('http');
 const path = require('path');
-const { readFileSync } = require('node:fs');
+const { readFileSync, existsSync } = require('node:fs');
 const { checkSchema, validationResult } = require('express-validator');
 const { createTerminus } = require('@godaddy/terminus');
 const bodyParser = require('body-parser');
@@ -12,10 +12,25 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const upload = multer();
 
-const courseFunctionMap = new Map([
-  ["webapp", duplicateRepo],
-  ["react", duplicateRepoAndCreatePR],
-]);
+const courseFunctionMap = new Map();
+courseFunctionMap.set('webapp', async (options) => {
+  const taskRepo = duplicateRepo(options);
+  const codeReviewRepoSource = `curator-code-review`;
+  const codeReviewRepoTarget = `${codeReviewRepoSource}-${options.curator}`;
+  const codeReviewRepo = duplicateRepoAndCreatePR({
+    ...options,
+    source: codeReviewRepoSource,
+    target: codeReviewRepoTarget,
+    from: 'homework',
+  });
+  return Promise.all([taskRepo, codeReviewRepo]);
+});
+courseFunctionMap.set('react', async (options) => {
+  return duplicateRepoAndCreatePR({
+    ...options,
+    from: '3-state',
+  })
+});
 
 console.log(
   process.env.INVITE_PASSWORD,
@@ -72,18 +87,10 @@ app.post(
       return;
     }
 
-
-    const result = await duplicateRepo({
-      token: process.env.INVITE_GITHUB_TOKEN,
-      curator: req.body.username,
-      owner: `prjctr-${course}`,
-      source: 'curator',
-      target: `curator-${req.body.username}`,
-    });
-
-
+    const course = req.body.course;
     const filePath = path.join(__dirname, `./node_modules/interview-pr/descriptions`, `./${course}.md`);
-    const PRDesc = readFileSync(filePath, 'utf8');
+    const hasDescription = existsSync(filePath);
+    const PRDesc = hasDescription ? readFileSync(filePath, 'utf8') : '';
     const options = {
       username: process.env.INVITE_GITHUB_USERNAME,
       token: process.env.INVITE_GITHUB_TOKEN,
@@ -91,10 +98,9 @@ app.post(
       owner: `prjctr-${course}`,
       source: 'curator',
       target: `curator-${req.body.username}`,
-      from: '3-state',
       to: 'main',
       localPathToRepo: __dirname,
-      PRTitle: '3-state',
+      PRTitle: 'Домашня робота',
       PRDesc,
     };
     const cloner = courseFunctionMap.get(course);
@@ -103,19 +109,16 @@ app.post(
     }
     try {
       const result = await cloner(options);
-      console.log(result);
-      console.log(result?.stdout?.toString());
-      console.log(result?.stderr?.toString());
+      res.status(200).json(result).end();
     } catch (error) {
       console.log(error);
-      console.log(error?.stdout?.toString());
-
+      console.log(error?.stdout.toString());
       console.log(error?.data);
       if (error?.stderr !== undefined) {
-        console.log(error?.stderr?.toString());
+        console.log(error?.stderr.toString());
         res.status(400).json([
           {
-            "msg": error?.stderr?.toString(),
+            "msg": error?.stderr.toString(),
             "path": "password",
           }
         ]).end();
@@ -125,7 +128,7 @@ app.post(
         res.status(400).json(error?.response.data.errors).end();
       }
     }
-    res.status(204).end();
+
   });
 
 function beforeShutdown() {
